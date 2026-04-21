@@ -1,0 +1,8 @@
+{
+  "mqtt": {
+    "server": "tcp://test.mosquitto.org",
+    "port": 1883,
+    "pub_topic": "test/device001/status",
+    "sub_topic": "test/device001/cmd"
+  }
+}

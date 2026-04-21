@@ -1,0 +1,31 @@
+#include <Preferences.h>
+
+Preferences prefs;
+
+void setup() {
+  Serial.begin(115200);Serial.println("\nStarting...");
+  delay(4000);
+    prefs.begin("wifi", false); // namespace
+
+    // prefs.putString("ssid", "netgear51");
+    // prefs.putString("pass", "excitedstreet416");
+
+    String ssid = prefs.getString("ssid", "");
+    String pass = prefs.getString("pass", "");
+
+    Serial.println(ssid);
+    Serial.println(pass);
+
+    prefs.end();
+}
+
+void loop() {
+    for (int i = 0; i < 10; i++) {
+        Serial.println("Hello, world!");
+        delay(1000);
+        digitalWrite(2, HIGH);
+        delay(500);
+        digitalWrite(2, LOW);
+        delay(500);
+    }
+  }
