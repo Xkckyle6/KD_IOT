@@ -22,10 +22,8 @@ def on_message(client, userdata, msg):
 client = mqtt.Client()
 client.on_connect = on_connect
 client.on_message = on_message
-
 client.connect(BROKER, PORT, 60)
 client.loop_start()
-
 time.sleep(1)
 
 test_payload = {
@@ -34,7 +32,7 @@ test_payload = {
     "timestamp": time.time()
 }
 
-client.publish(TOPIC, json.dumps(test_payload), qos=1)
+# client.publish(TOPIC, json.dumps(test_payload), qos=1)
 
 time.sleep(2)
 
