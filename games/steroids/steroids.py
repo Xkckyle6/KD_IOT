@@ -2,24 +2,26 @@ import json
 import queue
 import threading
 import time
+from tkinter import *
 import tkinter as tk
 from tkinter import messagebox
 
 from config import *
 import math
 
+from PIL import Image, ImageTk
 
 
 # create a class to store player information
 class Player:
-    def __init__(self, player_id, username="Player"):
+    def __init__(self, player_id, username="Player", sprite=None, ):
         self.player_id = player_id
         self.username = username
         self.x = 100
         self.y = 100
         self.v = 0
-        self.a = 0
-        self.th = 0 # rotation
+        self.accel = 0
+        self.th = 1 # rotation
         self.thd = 0 # rotation speed
         self.thdd = 0 # rotation acceleration
         self.radius = 10
@@ -27,6 +29,7 @@ class Player:
         self.level=1
         self.score=0
         self.alive = True
+        self.sprite = sprite
 
     #     
     def update(self, dt):
@@ -55,13 +58,17 @@ class Player:
         #     self.velocity.scale_to_length(self.max_speed)
 
         # Movement
-        self.x += self.v * math.cos(self.a) * dt
-        self.y += self.v * math.sin(self.a) * dt
-        self.th += self.thd * dt
+        # self.x += self.v * math.cos(self.th) * dt
+        # self.y += self.v * math.sin(self.th) * dt
+        # self.th += self.thd * dt
 
+        print(f"Before update: x={self.x}, y={self.y}, th={self.th}, v={self.v}")
+        self.x=self.x+self.v*math.cos(self.th)*dt
+        self.y=self.y+self.v*math.sin(self.th)*dt
+        self.th=self.th+self.thd*dt
         # Friction
-        self.v *= 0.95
-        self.thd *= 0.95
+        # self.v *= 0.95
+        # self.thd *= 0.95
 
     def can_fire(self):
         now = time.time()
@@ -108,11 +115,10 @@ class Player:
         self.rotation = data["th"]
 
         self.alive = data["alive"]
-
 plrs = {}
-
 plrs[0] = Player(0, "Player 1")
 
+## Main game class --------------------------------------------
 class MouseMQTTGame:
     def __init__(self, root, config, width=800, height=600):
         self.root = root
@@ -135,9 +141,9 @@ class MouseMQTTGame:
             fill="#ffffff",
             font=("Arial", 12),
             text="Connecting to MQTT...",
-        
+    
         )
-        self.timer = 3
+        self.plr_updateTime_last = 0
         # delay 1 second
         time.sleep(1)
 
@@ -154,6 +160,14 @@ class MouseMQTTGame:
             font=("Arial", 12),
             text="Remote: --",
         )
+        self.plr0_text = self.canvas.create_text(
+            780,
+            30,
+            anchor="ne",
+            fill="#ffffff",
+            font=("Arial", 12),
+            text="plr0: --",
+        )
 
         self.connect_mqtt()
 
@@ -166,6 +180,7 @@ class MouseMQTTGame:
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.update_loop()
         self.publish_loop()
+        self.plr_update_loop()
 
     def connect_mqtt(self):
         host = parse_mqtt_host(self.config["server"])
@@ -207,28 +222,32 @@ class MouseMQTTGame:
 
     def on_mouse_move(self, event):
         self.latest_mouse = (event.x, event.y)
-        self.canvas.coords(
-            self.local_sprite,
-            event.x - 2,
-            event.y - 2,
-            event.x + 2,
-            event.y + 2,
-        )
+        # self.canvas.coords(
+        #     self.local_sprite,
+        #     event.x - 2,
+        #     event.y - 2,
+        #     event.x + 2,
+        #     event.y + 2,
+        # )
     
     def on_key(self,event):
         # dx = dy = 0
         if event.keysym == "Left":
-            # dx = -10
-             print("Spin Left")
+            print("Spin Left")
+            plrs[0].thd += 0.1
         elif event.keysym == "Right":
             # dx = 10
             print("Spin Right")
+            plrs[0].thd -= 0.1
+            plrs[0].x = plrs[0].x+10
         elif event.keysym == "Up":
             # dy = -10
             print("Spin Up")
+            plrs[0].v += 0.1
         elif event.keysym == "Down":
             # dy = 10
             print("Spin Down")
+            plrs[0].v -= 0.1
         # if dx or dy:
         #     c.move(rect, dx, dy)
 
@@ -242,6 +261,8 @@ class MouseMQTTGame:
         else:
             self.canvas.coords(self.remote_circle, 0, 0, 0, 0)
             self.canvas.itemconfigure(self.remote_text, text="Remote: --")
+        # update local player text
+        self.canvas.itemconfigure(self.plr0_text, text=f"plr0: {int(plrs[0].x)}, {int(plrs[0].y)}, th={round(plrs[0].th,2)}, v={round(plrs[0].v,2)}")
         self.root.after(50, self.update_loop)
 
     def publish_loop(self):
@@ -249,6 +270,23 @@ class MouseMQTTGame:
         payload = json.dumps({"x": x, "y": y, "timestamp": time.time()})
         self.client.publish(self.config["pub_topic"], payload, qos=0)
         self.root.after(50, self.publish_loop)
+
+    def plr_update_loop(self):
+        # dt = time.time() - self.plr_updateTime_last
+        dt = 0.05 # seconds
+        plrs[0].update(dt)
+        # update local sprite position
+        self.canvas.coords(
+            self.local_sprite,
+            plrs[0].x - 5,
+            plrs[0].y,
+            plrs[0].x + 5,
+            plrs[0].y - 20,
+            plrs[0].x + 15,
+            plrs[0].y
+        )
+        # self.root.after(int(dt * 1000), self.plr_update_loop)
+        self.root.after(50, self.plr_update_loop)
 
     def on_close(self):
         try:

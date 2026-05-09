@@ -13,6 +13,7 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config.json")
 
 DEFAULT_CONFIG = {
     "mqtt": {
+        # "server": "192.168.1.29",
         "server": "127.0.0.1",
         "port": 1883,
         "pub_topic": "games/mouse/position",
