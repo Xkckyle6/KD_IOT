@@ -10,11 +10,19 @@ from config import *
 import math
 
 from PIL import Image, ImageTk
+import os
+
+FRAME_W, FRAME_H = 64, 64      # single frame size
+NUM_FRAMES = 8
+SHEET_X_OFFSET = 0             # if frames start with margin
+SHEET_Y_OFFSET = 0
+
+SPRITESHEET_PATH = os.path.join("games", "steroids", "media", "ships.png")
 
 
 # create a class to store player information
 class Player:
-    def __init__(self, player_id, username="Player", sprite=None, ):
+    def __init__(self, player_id, username="Player", sprite=None, imagetk=None, sprite_id=0, frame=0):
         self.player_id = player_id
         self.username = username
         self.x = 100
@@ -30,6 +38,11 @@ class Player:
         self.score=0
         self.alive = True
         self.sprite = sprite
+
+        self.sprite_id = sprite_id   # unused here but left for multi-sprite support
+        self.frame = frame
+        self.image_ref = None        # holds current PhotoImage
+        self.image_tk = image_tk
 
     #     
     def update(self, dt):
@@ -62,10 +75,11 @@ class Player:
         # self.y += self.v * math.sin(self.th) * dt
         # self.th += self.thd * dt
 
-        print(f"Before update: x={self.x}, y={self.y}, th={self.th}, v={self.v}")
+        # print(f"Before update: x={self.x}, y={self.y}, th={self.th}, v={self.v}")
         self.x=self.x+self.v*math.cos(self.th)*dt
         self.y=self.y+self.v*math.sin(self.th)*dt
         self.th=self.th+self.thd*dt
+
         # Friction
         # self.v *= 0.95
         # self.thd *= 0.95
@@ -132,7 +146,7 @@ class MouseMQTTGame:
 
         self.root.title("Steroids! Do'em!")
         self.root.geometry(f"{width}x{height}")
-        self.canvas = tk.Canvas(root, width=width, height=height, bg="#181717")
+        self.canvas = tk.Canvas(root, width=width, height=height, bg="#4E3F3F")
         self.canvas.pack(fill="both", expand=True)
         self.status_text = self.canvas.create_text(
             10,
@@ -147,10 +161,14 @@ class MouseMQTTGame:
         # delay 1 second
         time.sleep(1)
 
+
+        sheet = Image.open(SPRITESHEET_PATH).convert("RGBA")
+
         # self.local_circle = self.canvas.create_oval(0, 0, 20, 20, fill="#33cc33", outline="")
         self.remote_circle = self.canvas.create_oval(0, 0, 0, 0, fill="#ff4444", outline="")
         #triangle
         self.local_sprite = self.canvas.create_polygon(plrs[0].x-5, plrs[0].y, plrs[0].x+5, plrs[0].y-20, plrs[0].x+15, plrs[0].y, fill="#33cc33", outline="#FFFFFF")
+        self.local_sprite2 = self.canvas.create_polygon(400, 300, 405, 280, 415, 300, fill="#334acc", outline="#AD2C2C")
 
         self.remote_text = self.canvas.create_text(
             780,
@@ -181,7 +199,27 @@ class MouseMQTTGame:
         self.update_loop()
         self.publish_loop()
         self.plr_update_loop()
+    
+    # Helper: extract frame index -> PIL Image
+    def get_frame_image(self,frame_index):
+        fi = frame_index % NUM_FRAMES
+        left = SHEET_X_OFFSET + fi * FRAME_W
+        upper = SHEET_Y_OFFSET
+        box = (left, upper, left + FRAME_W, upper + FRAME_H)
+        return self.sheet.crop(box)
+    # Cache rotated frames for a given animation frame and angle (optional)
+    _cache = {}  # key: (frame_index, angle) -> ImageTk.PhotoImage
 
+    def get_rotated_photo(frame_index, angle):
+        key = (frame_index, angle % 360)
+        if key in _cache:
+            return _cache[key]
+        frame = get_frame_image(frame_index)
+        rotated = frame.rotate(-angle, resample=Image.BICUBIC, expand=True)
+        photo = ImageTk.PhotoImage(rotated)
+        _cache[key] = photo
+        return photo
+    
     def connect_mqtt(self):
         host = parse_mqtt_host(self.config["server"])
         port = self.config["port"]
@@ -273,18 +311,32 @@ class MouseMQTTGame:
 
     def plr_update_loop(self):
         # dt = time.time() - self.plr_updateTime_last
-        dt = 0.05 # seconds
-        plrs[0].update(dt)
+
+        for plr in plrs.values():
+            plr.update(0.05)  # seconds
+
+
         # update local sprite position
-        self.canvas.coords(
-            self.local_sprite,
-            plrs[0].x - 5,
-            plrs[0].y,
-            plrs[0].x + 5,
-            plrs[0].y - 20,
-            plrs[0].x + 15,
-            plrs[0].y
-        )
+        # self.canvas.coords(
+        #     self.local_sprite,
+        #     plrs[0].x - 5,
+        #     plrs[0].y,
+        #     plrs[0].x + 5,
+        #     plrs[0].y - 20,
+        #     plrs[0].x + 15,
+        #     plrs[0].y
+        # )
+
+        # rotate local sprite
+        # x0, y0 = plrs[0].x, plrs[0].y
+        # th = plrs[0].th
+        # points = [
+        #     (x0 - 5, y0),
+        #     (x0 + 5, y0 - 20),
+        #     (x0 + 15, y0)
+        # ]
+        # rotated_points = []
+
         # self.root.after(int(dt * 1000), self.plr_update_loop)
         self.root.after(50, self.plr_update_loop)
 
